@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const window={BadumaUI:{React:{createElement:()=>null},root:{render:()=>{}}},supabase:{createClient:()=>({})}};
+const window={BadumaUI:{React:{createElement:()=>null},root:{render:()=>{}}},supabase:{createClient:()=>({})},BadumaAdmin:{}};
 vm.runInNewContext(fs.readFileSync(fs.existsSync('realtime.js')?'realtime.js':'dist/realtime.js','utf8'),{window,location:{pathname:'/customer'}});
 const {normalizeCart,total}=window.BadumaLive;
 const products=[{id:'egg-kottu',name:'Egg Kottu',product_variants:[{label:'Large',price_lkr:800}]}];
