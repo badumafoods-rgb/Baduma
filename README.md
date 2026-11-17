@@ -1,21 +1,22 @@
-# BADUMA Ordering Preview
+# BADUMA live ordering
 
-Existing BADUMA customer menu and staff panel preview migrated from BADUMA Ordering Preview (version 6).
+Supabase-backed customer ordering and staff panel.
 
-## Run
+- Customer: https://baduma-ordering-preview.spiffybard257.chatgpt.site/customer/
+- Admin: https://baduma-ordering-preview.spiffybard257.chatgpt.site/admin/
 
-Serve this repository as a static website. The entry point is `index.html`; images, styles and JavaScript are embedded. No install or build step is required.
+Serve this repository as a static site; no build is required. Entry points are index.html, customer/index.html and admin/index.html, with realtime.js at the root. The retained Sites deployment uses the same assets under its dist directory.
 
-## Current functionality
+Database integration uses project mduiomtaykqeenoohaee. Only a public publishable key is included in client code. Account passwords and privileged keys are never committed. Staff authorization is enforced by database roles and policies, not browser navigation.
 
-Customer menu and test orders, manager order handling and POS, promotions, rider delivery workflow, signature capture and cashier handover views.
+Implemented: live catalogue, owned customer orders, server pricing and idempotency, manager confirmation/preparation/dispatch, POS sales, promotions, availability, rider GPS and delivery/COD signatures, cashier settlement.
 
-## Data and authentication
+Verified against the backend: master and test-customer login, anonymous order access denial, server pricing, duplicate submission handling, denial of customer staff actions, admin status transition, customer status read, and actual websocket insert/update delivery. One clearly labelled rejected verification order remains for inspection. Both public routes and live catalogue render in the browser. Rider/cashier physical-device flows remain for acceptance testing.
 
-This is a local test preview. Orders and promotions use browser localStorage and do not sync across devices. Role selection and the displayed preview sign-in code are simulations, not production authentication. Rider GPS is displayed locally. Use sample data only.
+Delivery route distance is currently entered at checkout and is an estimate. Dining-table labels and rider staff accounts must be configured before those workflows can be used. GPS sharing requires an open browser and user location permission.
 
-No Supabase backend is connected in this migrated version. Production use requires server-side authorization, shared order storage, validated pricing and status transitions, and authenticated staff roles.
+See backend/RELEASE.md for setup and acceptance notes. backend/realtime.sql has already been applied; do not rerun it unchanged.
 
-## Source
+Source note: index.html contains the recovered bundled React menu and embedded images; realtime.js is the editable backend integration.
 
-`index.html` is the recovered bundled preview artifact, not the original editable framework source. The original hosted preview remains at https://baduma-ordering-preview.spiffybard257.chatgpt.site .
+Validation: node --check realtime.js; node backend/verify-client.cjs.

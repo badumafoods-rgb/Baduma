@@ -1,8 +1,8 @@
-# Realtime integration: pending database approval
+# Realtime integration release
 
 Target: existing BADUMA Supabase project `mduiomtaykqeenoohaee`.
 
-The live site has NOT been updated. The migration was rejected by automatic approval review because it changes production order schema, policies, grants, privileged routines and realtime publication without sufficiently specific authorization or staged verification. No database changes from this branch were applied.
+The user explicitly approved production database integration and deployment. The migration has now been applied successfully. Browser and cross-device acceptance checks follow deployment.
 
 ## Prepared functionality
 
@@ -16,9 +16,9 @@ The live site has NOT been updated. The migration was rejected by automatic appr
 
 `backend/realtime.sql` adds order details, request IDs and discounts, allows POS channel, adds promotions and rider location tables, creates scoped read/write policies, adds authenticated RPCs and enables realtime for the required tables. Existing catalogue data and orders are retained. Signature data is stored in the existing settlement signature column with an explicit size limit and protected read access.
 
-## Activation sequence after approval
+## Activation and acceptance checks
 
-1. Validate and apply `backend/realtime.sql` to the named project. No auth-user export is needed.
+1. Validate and apply `backend/realtime.sql` to the named project. No auth-user export is needed. Dedicated master admin and test-customer accounts are provisioned; credentials are not stored in this repository.
 2. Verify public catalogue access, customer isolation, staff role restrictions and status transitions using scoped test accounts. End-to-end database and websocket tests have not yet run.
 3. Confirm the intended administrator account and assign its role through a trusted administrative process. Never accept a browser-selected staff role. Existing employees table is empty; staff access requires provisioning.
 4. Configure actual active dining-table labels; none currently exist. Dine-in orders intentionally reject unknown tables.
