@@ -7,7 +7,7 @@
   const adminPage=location.pathname.startsWith('/admin');
   const loginEmail=value=>{const v=value.trim().toLowerCase();return ({masteradmin:'masteradmin@baduma.local',testcustomer:'testcustomer@baduma.local'}[v]||(v.includes('@')?v:v+'@staff.baduma.local'));};
   const {StaffManager,ProductManager,ExpenseManager,Dashboard,roleNames}=window.BadumaAdmin;
-  const defaultView=me=>me.role==='admin'?'Dashboard':me.permissions.includes('orders.manage')?'Orders':me.permissions.includes('delivery.use')?'Rider':me.permissions.includes('pos.use')?'POS':'Dashboard';
+  const defaultView=me=>new URLSearchParams(location.search).get('open')==='Messages'&&(me.role==='admin'||me.permissions.includes('orders.manage'))?'Messages':me.role==='admin'?'Dashboard':me.permissions.includes('orders.manage')?'Orders':me.permissions.includes('delivery.use')?'Rider':me.permissions.includes('pos.use')?'POS':'Dashboard';
   const db=window.supabase.createClient('https://mduiomtaykqeenoohaee.supabase.co','sb_publishable_msclttzX3_M30cNy5r0zGQ_Knw99_Yb');
   const money=n=>'Rs. '+Number(n||0).toLocaleString('en-LK');
   const names={new:'New',accepted:'Confirmed',rejected:'Rejected',preparing:'Preparing',ready:'Ready',out_for_delivery:'Dispatched',delivered_pending_handover:'Delivered',closed:'Closed',cancelled:'Cancelled'};
@@ -20,6 +20,7 @@
     if(!product.product_variants.some(v=>v.label===variant))throw Error('Please choose a valid size.');
     return {product_id:product.id,variant,extras:labels,quantity:item.quantity};
   });}
+  if(!adminPage&&window.BadumaCustomer){root.render(h(window.BadumaCustomer.App,{db}));return;}
   function App(){
     const [profile,setProfile]=useState({role:'',permissions:[]});
     const [session,setSession]=useState(null),[role,setRole]=useState(''),[view,setView]=useState('Customer');
@@ -28,6 +29,7 @@
     const [email,setEmail]=useState(()=>new URLSearchParams(location.search).get('username')||''),[password,setPassword]=useState(''),[register,setRegister]=useState(false),[request,setRequest]=useState(crypto.randomUUID());
     const gps=useRef(null),lastGps=useRef(0),pending=useRef(false),generation=useRef(0);
     const authUser=useRef(null);
+    const [messageTarget,setMessageTarget]=useState('');
     const can=key=>profile.role==='admin'||profile.permissions.includes(key);
     const canManage=can('orders.manage'),canCash=can('cash.handover');
     async function action(fn){if(pending.current)return;pending.current=true;setBusy(true);setMessage('');try{await fn();}catch(e){setMessage(e.message||'The action failed. Please retry.');}finally{pending.current=false;setBusy(false);}}
@@ -90,7 +92,7 @@
     async function dispatch(order,next,rider=null){await ok(db.rpc('baduma_dispatch_order',{p_id:order.id,p_next:next,p_rider:rider}));await recordsLoad(session.user,role);}
     function btn(label,fn,extra={}){return h('button',{className:'bm-button',disabled:busy,onClick:()=>action(fn),...extra},label);}
     function input(name,props={}){return h('label',null,name,h('input',{name,...props}));}
-    const views=adminPage?(session&&role?['Dashboard',...(can('orders.view')||canManage?['Orders']:[]),...(can('pos.use')?['POS']:[]),...(can('products.manage')?['Products']:[]),...(can('promotions.manage')?['Promotions']:[]),...(can('expenses.view')||can('expenses.manage')?['Expenses']:[]),...(can('users.manage')?['Users']:[]),...(role==='rider'&&can('delivery.use')?['Rider']:[]),...(canCash?['Cashier']:[])]:[]):['Customer'];
+    const views=adminPage?(session&&role?['Dashboard',...(role==='admin'?['Customers','Invoices','Salaries','Reports']:[]),...(can('orders.view')||canManage?['Orders']:[]),...(can('pos.use')?['POS']:[]),...(can('products.manage')?['Products']:[]),...(can('promotions.manage')?['Promotions']:[]),...(can('expenses.view')||can('expenses.manage')?['Expenses']:[]),...(can('users.manage')?['Employees']:[]),...(can('orders.manage')?['Messages']:[]),...(role==='rider'&&can('delivery.use')?['Rider']:[]),...(canCash?['Cashier']:[])]:[]):['Customer'];
     useEffect(()=>{if(adminPage&&session&&role&&!views.includes(view))setView('Dashboard');},[profile,view]);
     const shown=orders.filter(o=>view==='Customer'?o.customer_id===session?.user.id:view==='Rider'?o.rider_id===session?.user.id:view==='Cashier'?['delivered_pending_handover','closed'].includes(o.status):true);
     return h('div',{className:'bm'},
@@ -104,14 +106,19 @@
           h('label',null,'Password',h('input',{type:'password',required:true,minLength:8,value:password,onChange:e=>setPassword(e.target.value),autoComplete:register?'new-password':'current-password'})),
           h('button',{className:'bm-button',disabled:busy},register?'Create account':'Sign in'),
           !adminPage&&h('button',{type:'button',className:'bm-outline',onClick:()=>setRegister(!register)},register?'Already have an account? Sign in':'New customer? Create account'))),
+      session&&role&&window.BadumaAlerts&&h(window.BadumaAlerts.Panel,{db,userId:session.user.id,onOpen:async n=>{if(n.kind==='message'&&can('orders.manage')){if(n.message_id){try{const m=await ok(db.from('customer_messages').select('customer_id').eq('id',n.message_id).single());setMessageTarget(m.customer_id)}catch{}}setView('Messages')}else setView(role==='rider'?'Rider':'Orders')}}),
       message&&h('p',{role:'status',className:'bm-demo-note'},message),
       view==='Customer'&&h('section',null,...promos.filter(p=>p.active).map(p=>h('article',{key:p.code,className:'bm-card'},p.image&&h('img',{src:p.image,alt:p.title}),h('strong',null,p.title),h('p',null,(p.kind==='percent'?p.value+'% off':money(p.value)+' off')+' · POS code '+p.code)))),
       view==='Customer'&&!adminPage&&(ready?h(Menu,{products:catalog.products.filter(p=>p.available),categories:catalog.categories,preview:false,onPlace:place}):h('p',null,'Loading live menu…')),
-      view==='Promotions'&&h('section',null,h('h2',null,'Promotions'),h('form',{className:'bm-checkout',onSubmit:e=>{e.preventDefault();const f=new FormData(e.currentTarget);action(async()=>{await ok(db.from('promotions').upsert({code:String(f.get('code')).toUpperCase(),title:String(f.get('title')),kind:String(f.get('kind')),value:Number(f.get('value')),active:true}));await catalogLoad();});}},input('code',{required:true,maxLength:40}),input('title',{required:true}),h('select',{name:'kind'},h('option',{value:'percent'},'Percent'),h('option',{value:'fixed'},'Fixed discount')),input('value',{type:'number',min:1,required:true}),h('button',{className:'bm-button',disabled:busy},'Save offer')),
-        ...promos.map(p=>h('p',{key:p.code},p.title+' · '+p.code,btn(p.active?'Pause':'Activate',async()=>{await ok(db.from('promotions').update({active:!p.active}).eq('code',p.code));await catalogLoad();})))),
+      view==='Promotions'&&can('promotions.manage')&&h(window.BadumaOps.Promotions,{db,profile,promos,onSaved:catalogLoad,onError:setMessage}),
       adminPage&&session&&view==='Access'&&h('section',{className:'ba-card'},h('h2',null,'No staff access'),h('p',null,'This account has no active staff role. Ask Master Admin to create or activate your account.')),
       view==='Dashboard'&&h(Dashboard,{profile,orders,onNavigate:setView}),
-      view==='Users'&&can('users.manage')&&h(StaffManager,{db,profile,onError:setMessage}),
+      role==='admin'&&view==='Invoices'&&h(window.BadumaOps.Invoices,{db,profile,onError:setMessage}),
+      role==='admin'&&view==='Salaries'&&h(window.BadumaOps.Payroll,{db,profile,onError:setMessage}),
+      role==='admin'&&view==='Reports'&&h(window.BadumaOps.Reports,{db,profile,onError:setMessage}),
+      view==='Customers'&&role==='admin'&&h(window.BadumaCustomerDirectory,{db,profile}),
+      view==='Messages'&&can('orders.manage')&&h(window.BadumaCustomer.StaffMessages,{db,onError:setMessage,selectedCustomer:messageTarget}),
+      ['Users','Employees'].includes(view)&&can('users.manage')&&h(window.BadumaOps.Employees,{db,profile,onError:setMessage}),
       view==='Products'&&can('products.manage')&&h(ProductManager,{db,catalog,onSaved:catalogLoad,onError:setMessage}),
       view==='Expenses'&&(can('expenses.view')||can('expenses.manage'))&&h(ExpenseManager,{db,profile,onError:setMessage}),
       view==='POS'&&h(Sale,{db,products:catalog.products.filter(p=>p.available),promos,place,onError:e=>setMessage(e.message),busy}),
@@ -123,12 +130,15 @@
           h('p',null,o.channel==='dine_in'?'Table '+o.details.table:o.channel==='pos'?'POS sale':o.details.address),
           h('p',null,[o.contact_name,o.contact_phone].filter(Boolean).join(' · ')),
           h('ul',null,...o.order_items.map(i=>h('li',{key:i.id},i.item_name+' · '+i.variant_label+' × '+i.quantity+' · '+money(i.unit_price_lkr*i.quantity)))),
-          h('strong',null,'Total '+money(total(o))),h('p',null,'Delivery '+money(o.final_delivery_lkr??o.quoted_delivery_lkr)+' · Discount '+money(o.discount_lkr)),
+          h('strong',null,'Total '+money(total(o))),view==='Rider'&&['accepted','preparing'].includes(o.status)&&h('p',null,'Your assigned order is being prepared. Wait for the Ready / Pick up alert.'),view==='Rider'&&o.status==='ready'&&h('p',null,'Ready for pickup. Confirm collection with the manager before dispatch.'),o.status==='delivered_pending_handover'&&h('p',null,'Cash collected · Restaurant cash receipt NOT YET marked.'),h('p',null,'Delivery '+money(o.final_delivery_lkr??o.quoted_delivery_lkr)+' · Discount '+money(o.discount_lkr)),
           canManage&&view==='Orders'&&h('div',null,
-            ...(o.status==='new'?[btn('Confirm',()=>dispatch(o,'accepted')),btn('Reject',()=>dispatch(o,'rejected'))]:[]),
+            btn('Message customer',async()=>{setMessageTarget(o.customer_id);setView('Messages')}),
+            o.channel==='delivery'&&['new','accepted','preparing','ready'].includes(o.status)&&h('form',{className:'ba-card',onSubmit:e=>{e.preventDefault();const km=Number(new FormData(e.currentTarget).get('km'));action(async()=>{await ok(db.rpc('baduma_confirm_delivery_distance',{p_order:o.id,p_km:km}));await recordsLoad(session.user,role);})}},h('p',null,'Confirm road distance before marking Ready. First 1 km free; then Rs. 60/km.'),h('label',null,'Delivery distance (km)',h('input',{name:'km',type:'number',min:0,max:100,step:0.01,required:true,defaultValue:o.details.confirmed_distance_km??o.details.distance})),h('button',{className:'bm-button',disabled:busy},o.details.distance_confirmed?'Update confirmed distance':'Confirm distance & bill')),
+
+            ...(o.status==='new'?[o.channel==='delivery'?h('form',{onSubmit:e=>{e.preventDefault();const rider=new FormData(e.currentTarget).get('rider');action(async()=>{await ok(db.rpc('baduma_begin_order',{p_order:o.id,p_rider:rider}));await recordsLoad(session.user,role);})}},h('select',{name:'rider',required:true},h('option',{value:''},'Choose driver for this order'),...riders.map(r=>h('option',{key:r.user_id,value:r.user_id},r.name))),h('button',{className:'bm-button',disabled:busy||!riders.length},'Accept & start preparing')):btn('Accept & start preparing',async()=>{await ok(db.rpc('baduma_begin_order',{p_order:o.id,p_rider:null}));await recordsLoad(session.user,role);}),btn('Reject',()=>dispatch(o,'rejected'))]:[]),
             o.status==='accepted'&&btn('Start preparing',()=>dispatch(o,'preparing')),
-            o.status==='preparing'&&btn('Mark ready',()=>dispatch(o,'ready')),
-            o.status==='ready'&&(o.channel==='dine_in'?btn('Complete table order',()=>dispatch(o,'closed')):h('form',{onSubmit:e=>{e.preventDefault();const rider=new FormData(e.currentTarget).get('rider');action(()=>dispatch(o,'out_for_delivery',rider));}},h('select',{name:'rider',required:true},h('option',{value:''},'Choose rider'),...riders.map(r=>h('option',{value:r.user_id,key:r.user_id},r.name))),h('button',{className:'bm-button',disabled:busy||!riders.length},'Dispatch')))),
+            o.status==='preparing'&&btn('Mark ready',()=>dispatch(o,'ready'),{disabled:busy||(o.channel==='delivery'&&!o.details.distance_confirmed)}),
+            o.status==='ready'&&(o.channel==='dine_in'?btn('Complete table order',()=>dispatch(o,'closed')):h('form',{onSubmit:e=>{e.preventDefault();const rider=new FormData(e.currentTarget).get('rider');action(()=>dispatch(o,'out_for_delivery',rider));}},h('select',{name:'rider',required:true,defaultValue:o.rider_id||''},h('option',{value:''},'Choose rider'),...riders.map(r=>h('option',{value:r.user_id,key:r.user_id},r.name))),h('button',{className:'bm-button',disabled:busy||!riders.length},'Dispatch')))),
           view==='Rider'&&o.status==='out_for_delivery'&&h(Signature,{order:{subtotal:total(o),deliveryFee:0},onDeliver:(signature,cash)=>action(async()=>{await ok(db.rpc('baduma_deliver',{p_id:o.id,p_cash:cash,p_signature:signature}));await recordsLoad(session.user,role);})}),
           view==='Rider'&&o.details.location&&h('a',{className:'bm-outline',href:'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(o.details.location),target:'_blank',rel:'noreferrer'},'Delivery directions'),
           canCash&&['Cashier','Orders'].includes(view)&&o.status==='delivered_pending_handover'&&btn('Confirm cash handover '+money(total(o)),async()=>{await ok(db.rpc('baduma_handover',{p_id:o.id,p_cash:total(o)}));await recordsLoad(session.user,role);}),
